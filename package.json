@@ -2,9 +2,9 @@
   "name": "chargebee-affiliate-integration",
   "version": "1.0.0",
   "description": "Chargebee integration for 8-level affiliate commissions",
-  "main": "server.js",
+  "main": "test-server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node test-server.js",
     "dev": "node server.js"
   },
   "dependencies": {
