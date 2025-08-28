@@ -242,16 +242,15 @@ class ChargebeeAffiliateIntegration {
     console.log('Subscription reactivated:', subscription.id);
   }
 
-  // Start the server
-  start() {
-    const PORT = process.env.PORT || 3000;
-    this.app.listen(PORT, () => {
-      console.log(`🚀 Chargebee Affiliate Integration running on port ${PORT}`);
-      console.log(`📊 Commission structure: L1=$${COMMISSION_AMOUNTS.level1}, L2=$${COMMISSION_AMOUNTS.level2}, L3=$${COMMISSION_AMOUNTS.level3}, L4-L8=$${COMMISSION_AMOUNTS.level4} each`);
-      console.log(`💰 Payout threshold: $${PAYOUT_THRESHOLD}`);
-      console.log(`🔗 Webhook endpoint: /webhooks/chargebee`);
-    });
-  }
+ // Start the server
+start() {
+  const PORT = process.env.PORT || 3000;
+  this.app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Chargebee Affiliate Integration running on port ${PORT}`);
+    console.log(`📊 Commission structure: L1=$${COMMISSION_AMOUNTS.level1}, L2=$${COMMISSION_AMOUNTS.level2}, L3=$${COMMISSION_AMOUNTS.level3}, L4-L8=$${COMMISSION_AMOUNTS.level4} each`);
+    console.log(`💰 Payout threshold: $${PAYOUT_THRESHOLD}`);
+    console.log(`🔗 Webhook endpoint: /webhooks/chargebee`);
+  });
 }
 
 // Initialize and start the integration
