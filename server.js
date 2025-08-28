@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const app = express();
 
 app.use(express.json());
@@ -19,14 +20,99 @@ const COMMISSION_AMOUNTS = {
 const PAYOUT_THRESHOLD = 50.00;
 const CHARGEBEE_SITE = process.env.CHARGEBEE_SITE;
 const CHARGEBEE_API_KEY = process.env.CHARGEBEE_API_KEY;
+const CHARGEBEE_WEBHOOK_SECRET = process.env.CHARGEBEE_WEBHOOK_SECRET;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
+class AffiliateProcessor {
+  // Mock affiliate hierarchy for testing
+  async getAffiliateHierarchy(affiliateId) {
+    console.log(`🔍 Looking up affiliate hierarchy for: ${affiliateId}`);
+    
+    // Return mock 8-level hierarchy
+    const hierarchy = [
+      { id: 'affiliate-1', level: 1, name: 'John Doe', email: 'john@example.com' },
+      { id: 'affiliate-2', level: 2, name: 'Jane Smith', email: 'jane@example.com' },
+      { id: 'affiliate-3', level: 3, name: 'Mike Johnson', email: 'mike@example.com' },
+      { id: 'affiliate-4', level: 4, name: 'Sarah Wilson', email: 'sarah@example.com' },
+      { id: 'affiliate-5', level: 5, name: 'Tom Brown', email: 'tom@example.com' },
+      { id: 'affiliate-6', level: 6, name: 'Lisa Davis', email: 'lisa@example.com' },
+      { id: 'affiliate-7', level: 7, name: 'Chris Miller', email: 'chris@example.com' },
+      { id: 'affiliate-8', level: 8, name: 'Amy Taylor', email: 'amy@example.com' }
+    ];
+    
+    return hierarchy;
+  }
+
+  async calculateCommissions(subscription, affiliateHierarchy, type, amount) {
+    const commissions = [];
+    let totalCommissions = 0;
+
+    console.log(`💰 Calculating ${type} commissions for ${affiliateHierarchy.length} levels`);
+
+    for (const affiliate of affiliateHierarchy) {
+      const levelKey = `level${affiliate.level}`;
+      const commissionAmount = COMMISSION_AMOUNTS[levelKey];
+      
+      if (commissionAmount) {
+        const commission = {
+          affiliate_id: affiliate.id,
+          affiliate_name: affiliate.name,
+          subscription_id: subscription.id,
+          level: affiliate.level,
+          type: type,
+          amount: commissionAmount,
+          base_amount: amount,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        };
+        
+        commissions.push(commission);
+        totalCommissions += commissionAmount;
+        
+        console.log(`   L${affiliate.level}: ${affiliate.name} → $${commissionAmount}`);
+      }
+    }
+
+    console.log(`   📊 Total commissions: $${totalCommissions}`);
+    
+    // Check for payout threshold
+    for (const commission of commissions) {
+      await this.checkPayoutThreshold(commission.affiliate_id, commission.affiliate_name);
+    }
+
+    return commissions;
+  }
+
+  async checkPayoutThreshold(affiliateId, affiliateName) {
+    // Mock current balance - in production, this would query your database
+    const mockBalance = Math.floor(Math.random() * 100); // Random balance for demo
+    
+    console.log(`💳 ${affiliateName} current balance: $${mockBalance}`);
+    
+    if (mockBalance >= PAYOUT_THRESHOLD) {
+      console.log(`🎉 PAYOUT TRIGGERED! ${affiliateName} reached $${PAYOUT_THRESHOLD} threshold`);
+      console.log(`   💸 Processing instant payout of $${mockBalance}...`);
+      // In production, this would trigger the actual payout
+    }
+  }
+}
+
+const processor = new AffiliateProcessor();
+
+// Routes
 app.get('/', (req, res) => {
   res.json({ 
     status: 'active', 
     service: 'Chargebee Affiliate Integration',
     version: '1.0.0',
     commission_structure: COMMISSION_AMOUNTS,
-    payout_threshold: PAYOUT_THRESHOLD
+    payout_threshold: PAYOUT_THRESHOLD,
+    features: [
+      '8-level commission tracking',
+      'Instant payouts at $50',
+      'Chargebee webhook integration',
+      'Stripe payout processing'
+    ]
   });
 });
 
@@ -34,33 +120,36 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    chargebee_configured: !!CHARGEBEE_API_KEY
+    chargebee_configured: !!CHARGEBEE_API_KEY,
+    stripe_configured: !!STRIPE_SECRET_KEY,
+    webhook_secret_configured: !!CHARGEBEE_WEBHOOK_SECRET
   });
 });
 
-app.post('/webhooks/chargebee', (req, res) => {
-  const event_type = req.body.event_type || 'unknown';
-  console.log('📨 Chargebee webhook received:', event_type);
-  
-  // Mock commission calculation for demo
-  if (event_type === 'subscription_created') {
-    console.log('💰 New subscription - calculating commissions...');
-    console.log('Commission amounts:', COMMISSION_AMOUNTS);
-    console.log('Total payout for 8 levels: $19.00');
+// Webhook signature verification
+function verifyWebhookSignature(payload, signature) {
+  if (!signature || !CHARGEBEE_WEBHOOK_SECRET) {
+    console.log('⚠️  Webhook signature verification skipped (no secret configured)');
+    return true; // Skip verification in development
   }
-  
-  res.json({ 
-    status: 'received',
-    event_type: event_type,
-    processed: true
-  });
-});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Chargebee Affiliate Integration running on port ${PORT}`);
-  console.log(`📊 Commission structure: L1=$${COMMISSION_AMOUNTS.level1}, L2=$${COMMISSION_AMOUNTS.level2}, L3=$${COMMISSION_AMOUNTS.level3}, L4-L8=$${COMMISSION_AMOUNTS.level4} each`);
-  console.log(`💰 Payout threshold: $${PAYOUT_THRESHOLD}`);
-  console.log(`🔗 Webhook endpoint: /webhooks/chargebee`);
-  console.log(`⚙️  Chargebee configured: ${CHARGEBEE_API_KEY ? 'Yes' : 'No'}`);
-});
+  const expectedSignature = crypto
+    .createHmac('sha256', CHARGEBEE_WEBHOOK_SECRET)
+    .update(payload)
+    .digest('hex');
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(signature, 'hex'),
+    Buffer.from(expectedSignature, 'hex')
+  );
+}
+
+// Main webhook handler
+app.post('/webhooks/chargebee', async (req, res) => {
+  try {
+    const signature = req.headers['chargebee-webhook-signature'];
+    const payload = JSON.stringify(req.body);
+
+    // Verify signature (optional in development)
+    if (!verifyWebhookSignature(payload, signature)) {
+      console.log('❌ Invalid webhook signature');
