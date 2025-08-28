@@ -38,15 +38,29 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Simple webhook handler
+// Enhanced webhook handler with better error handling
 app.post('/webhooks/chargebee', (req, res) => {
   try {
-    const event_type = req.body.event_type || 'unknown';
-    console.log('📨 Chargebee webhook received:', event_type);
+    console.log('📨 Raw webhook received');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
     
-    // Simple processing
+    // Safely get event type
+    const event_type = req.body?.event_type || 'unknown';
+    console.log('Event type:', event_type);
+    
+    // Simple processing with null checks
     if (event_type === 'subscription_created') {
       console.log('🎉 New subscription created!');
+      
+      // Safely access subscription data
+      const subscription = req.body?.content?.subscription;
+      if (subscription) {
+        console.log(`Subscription ID: ${subscription.id || 'unknown'}`);
+        console.log(`Plan ID: ${subscription.plan_id || 'unknown'}`);
+        console.log(`Amount: $${subscription.plan_amount || 0}`);
+      }
+      
       console.log('💰 Commission calculation:');
       console.log('   Level 1: $8.00');
       console.log('   Level 2: $4.00'); 
@@ -59,15 +73,24 @@ app.post('/webhooks/chargebee', (req, res) => {
       console.log('🔄 Subscription renewed - recurring commissions calculated');
     }
     
-    res.json({ 
+    // Always return success
+    res.status(200).json({ 
       status: 'received',
       event_type: event_type,
-      processed: true
+      processed: true,
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Webhook error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Still return 200 to prevent Chargebee retries
+    res.status(200).json({ 
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
