@@ -253,8 +253,12 @@ start() {
   });
 }
 
-// Initialize and start the integration
-const integration = new ChargebeeAffiliateIntegration();
-integration.start();
+// Initialize and start the integration only if this file is run directly
+if (require.main === module) {
+  const integration = new ChargebeeAffiliateIntegration();
+  integration.start();
+}
+
+module.exports = ChargebeeAffiliateIntegration;
 
 module.exports = ChargebeeAffiliateIntegration;
