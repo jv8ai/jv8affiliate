@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 
+// Simple middleware - no special webhook handling
 app.use(express.json());
 
 // Commission structure
@@ -38,59 +39,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Enhanced webhook handler with better error handling
+// Simple webhook handler
 app.post('/webhooks/chargebee', (req, res) => {
+  console.log('🔄 WEBHOOK RECEIVED!');
+  console.log('📨 Request headers:', req.headers);
+  console.log('📨 Request body:', req.body);
+  
   try {
-    console.log('📨 Raw webhook received');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    
-    // Safely get event type
     const event_type = req.body?.event_type || 'unknown';
-    console.log('Event type:', event_type);
+    console.log('✅ Event type:', event_type);
     
-    // Simple processing with null checks
     if (event_type === 'subscription_created') {
-      console.log('🎉 New subscription created!');
-      
-      // Safely access subscription data
+      console.log('🎉 NEW SUBSCRIPTION!');
       const subscription = req.body?.content?.subscription;
       if (subscription) {
-        console.log(`Subscription ID: ${subscription.id || 'unknown'}`);
-        console.log(`Plan ID: ${subscription.plan_id || 'unknown'}`);
-        console.log(`Amount: $${subscription.plan_amount || 0}`);
+        console.log(`ID: ${subscription.id}`);
+        console.log(`Plan: ${subscription.plan_id}`);
+        console.log('💰 Commissions: L1=$8, L2=$4, L3=$2, L4-L8=$1 each');
       }
-      
-      console.log('💰 Commission calculation:');
-      console.log('   Level 1: $8.00');
-      console.log('   Level 2: $4.00'); 
-      console.log('   Level 3: $2.00');
-      console.log('   Levels 4-8: $1.00 each');
-      console.log('   Total: $19.00');
     }
     
-    if (event_type === 'subscription_renewed') {
-      console.log('🔄 Subscription renewed - recurring commissions calculated');
-    }
-    
-    // Always return success
-    res.status(200).json({ 
-      status: 'received',
-      event_type: event_type,
-      processed: true,
-      timestamp: new Date().toISOString()
-    });
+    res.status(200).json({ status: 'success', event_type });
+    console.log('✅ Response sent');
     
   } catch (error) {
-    console.error('❌ Webhook error:', error);
-    console.error('Error stack:', error.stack);
-    
-    // Still return 200 to prevent Chargebee retries
-    res.status(200).json({ 
-      status: 'error',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    console.error('❌ Error:', error);
+    res.status(200).json({ status: 'error' });
   }
 });
 
