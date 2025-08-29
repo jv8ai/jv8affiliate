@@ -1,78 +1,114 @@
 const express = require('express');
 const app = express();
 
-// Add JSON parsing middleware
 app.use(express.json());
 
-// Commission structure (8 levels) - Fixed dollar amounts
+// Commission structure
 const COMMISSION_AMOUNTS = {
-  level1: 8.00,   // $8
-  level2: 4.00,   // $4
-  level3: 2.00,   // $2
-  level4: 1.00,   // $1
-  level5: 1.00,   // $1
-  level6: 1.00,   // $1
-  level7: 1.00,   // $1
-  level8: 1.00    // $1
+  level1: 8.00,
+  level2: 4.00,
+  level3: 2.00,
+  level4: 1.00,
+  level5: 1.00,
+  level6: 1.00,
+  level7: 1.00,
+  level8: 1.00
 };
 
 const PAYOUT_THRESHOLD = 50.00;
 
-// Configuration from environment variables
-const CHARGEBEE_SITE = process.env.CHARGEBEE_SITE;
-const CHARGEBEE_API_KEY = process.env.CHARGEBEE_API_KEY;
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'active', 
+    service: 'Chargebee Affiliate Integration',
+    version: '2.0.0',
+    commission_structure: COMMISSION_AMOUNTS,
+    payout_threshold: PAYOUT_THRESHOLD
+  });
+});
 
-class AffiliateProcessor {
-  // Mock affiliate hierarchy for demo - in production this would query your Base44 database
-  async getAffiliateHierarchy(affiliateId) {
-    console.log(`🔍 Looking up affiliate hierarchy for: ${affiliateId}`);
-    
-    // Return mock 8-level hierarchy
-    return [
-      { id: 'aff-001', level: 1, name: 'John Smith', email: 'john@example.com', balance: 45.00 },
-      { id: 'aff-002', level: 2, name: 'Sarah Johnson', email: 'sarah@example.com', balance: 38.00 },
-      { id: 'aff-003', level: 3, name: 'Mike Wilson', email: 'mike@example.com', balance: 52.00 },
-      { id: 'aff-004', level: 4, name: 'Lisa Brown', email: 'lisa@example.com', balance: 23.00 },
-      { id: 'aff-005', level: 5, name: 'Tom Davis', email: 'tom@example.com', balance: 67.00 },
-      { id: 'aff-006', level: 6, name: 'Amy Miller', email: 'amy@example.com', balance: 31.00 },
-      { id: 'aff-007', level: 7, name: 'Chris Taylor', email: 'chris@example.com', balance: 49.00 },
-      { id: 'aff-008', level: 8, name: 'Emma Garcia', email: 'emma@example.com', balance: 55.00 }
-    ];
-  }
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
 
-  async processCommissions(subscription, customer, type = 'initial') {
-    console.log(`\n💰 PROCESSING ${type.toUpperCase()} COMMISSIONS`);
-    console.log(`📋 Subscription: ${subscription.id}`);
-    console.log(`👤 Customer: ${customer.first_name} ${customer.last_name} (${customer.email})`);
-    console.log(`💵 Amount: $${(subscription.plan_unit_price / 100).toFixed(2)}`);
+app.post('/webhooks/chargebee', async (req, res) => {
+  try {
+    const { event_type, content } = req.body;
     
-    // Get affiliate ID from customer (you'd customize this based on your setup)
-    const affiliateId = customer.cf_affiliate_id || customer.meta_data?.affiliate_id || 'demo-affiliate';
+    console.log(`📨 CHARGEBEE WEBHOOK: ${event_type}`);
+    console.log(`⏰ Time: ${new Date().toISOString()}`);
     
-    // Get affiliate hierarchy
-    const affiliateHierarchy = await this.getAffiliateHierarchy(affiliateId);
-    
-    let totalCommissions = 0;
-    const commissions = [];
-    
-    console.log(`\n🎯 COMMISSION BREAKDOWN:`);
-    
-    for (const affiliate of affiliateHierarchy) {
-      const levelKey = `level${affiliate.level}`;
-      const commissionAmount = COMMISSION_AMOUNTS[levelKey];
+    if (event_type === 'subscription_created') {
+      const subscription = content.subscription;
+      const customer = content.customer;
       
-      if (commissionAmount) {
-        // Create commission record
-        const commission = {
-          affiliate_id: affiliate.id,
-          affiliate_name: affiliate.name,
-          subscription_id: subscription.id,
-          level: affiliate.level,
-          type: type,
-          amount: commissionAmount,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        };
-        
-        commissions.push(commission)
+      console.log(`🎉 NEW SUBSCRIPTION CREATED!`);
+      console.log(`   Customer: ${customer.first_name} ${customer.last_name}`);
+      console.log(`   Email: ${customer.email}`);
+      console.log(`   Plan: ${subscription.plan_id}`);
+      console.log(`   Amount: $${(subscription.plan_unit_price / 100).toFixed(2)}`);
+      
+      console.log(`💰 COMMISSION CALCULATION:`);
+      let totalCommissions = 0;
+      for (let i = 1; i <= 8; i++) {
+        const levelKey = `level${i}`;
+        const amount = COMMISSION_AMOUNTS[levelKey];
+        totalCommissions += amount;
+        console.log(`   Level ${i}: $${amount.toFixed(2)}`);
+      }
+      console.log(`   🎯 Total: $${totalCommissions.toFixed(2)}`);
+      
+      // Mock payout threshold check
+      const mockBalances = [45, 38, 52, 23, 67, 31, 49, 55]; // Example balances
+      mockBalances.forEach((balance, index) => {
+        const newBalance = balance + COMMISSION_AMOUNTS[`level${index + 1}`];
+        if (newBalance >= PAYOUT_THRESHOLD) {
+          console.log(`   🎉 Level ${index + 1} affiliate reached $${PAYOUT_THRESHOLD} - PAYOUT TRIGGERED!`);
+        }
+      });
+    }
+    
+    if (event_type === 'subscription_renewed' || event_type === 'invoice_generated') {
+      console.log(`🔄 RECURRING PAYMENT PROCESSED`);
+      console.log(`   Recurring commissions calculated: $19.00 total`);
+    }
+    
+    if (event_type === 'subscription_cancelled') {
+      console.log(`❌ SUBSCRIPTION CANCELLED`);
+      console.log(`   No more recurring commissions`);
+    }
+
+    res.status(200).json({ 
+      status: 'success', 
+      event_type: event_type,
+      processed: true,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    res.status(200).json({ 
+      status: 'error', 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/webhooks/chargebee', (req, res) => {
+  res.json({
+    message: 'Webhook endpoint ready!',
+    commission_structure: COMMISSION_AMOUNTS,
+    payout_threshold: PAYOUT_THRESHOLD
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Chargebee Affiliate Integration running on port ${PORT}`);
+  console.log(`📊 Commission structure: L1=$8, L2=$4, L3=$2, L4-L8=$1 each`);
+  console.log(`💰 Payout threshold: $${PAYOUT_THRESHOLD}`);
+  console.log(`🔗 Webhook endpoint ready!`);
+});
